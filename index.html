@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스마트 재난 대응 시뮬레이터 · 1인칭 3D</title>
+<style>
+:root{--bg:#07111d;--panel:#101f31;--edge:#29435d;--txt:#eaf4ff;--muted:#9eb3c9;--cyan:#48f0d0;--green:#43f29a}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:Arial,"Noto Sans KR",sans-serif}
+#app{height:100dvh;display:flex;flex-direction:column}
+header{height:58px;flex:0 0 58px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:#0a1726;border-bottom:1px solid var(--edge);z-index:4}
+h1{font-size:18px;margin:0}.sub{font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:.4px}.live{font-size:11px;color:#83f5c0;background:#12382f;border:1px solid #28624f;padding:7px 11px;border-radius:20px}
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 248px;gap:9px;padding:9px}
+#viewPanel{position:relative;min-width:0;min-height:0;background:#08131f;border:1px solid #29445e;border-radius:11px;overflow:hidden}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#hudTop{position:absolute;top:12px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;text-shadow:0 2px 5px #000}
+#viewName{font-size:11px;font-weight:bold;letter-spacing:1.3px}.hint{font-size:10px;color:#c6d7e8;margin-top:4px}.compass{font-size:12px;color:#bceee5}
+#crosshair{position:absolute;left:50%;top:50%;width:12px;height:12px;transform:translate(-50%,-50%);pointer-events:none;opacity:.65}
+#crosshair:before,#crosshair:after{content:"";position:absolute;background:#d9fff7;box-shadow:0 0 6px #40ffe0}
+#crosshair:before{width:1px;height:12px;left:5px}#crosshair:after{height:1px;width:12px;top:5px}
+#miniMapPanel{position:absolute;right:13px;bottom:54px;width:242px;padding:8px;background:rgba(5,15,25,.94);border:1px solid #4b718b;border-radius:9px;z-index:2;box-shadow:0 5px 20px #0008;pointer-events:none}
+#miniMapTitle{font-size:10px;font-weight:bold;color:#dffaf5;letter-spacing:.3px;margin:0 0 5px}
+#miniMap{display:block;width:100%;height:150px;background:#0a1724;border:1px solid #29445d;border-radius:4px}
+#miniMapLegend{display:flex;flex-wrap:wrap;gap:4px 9px;margin-top:5px;font-size:9px;color:#c6d7e8}
+.miniLegendItem{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.miniDot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.miniLine{width:12px;height:3px;display:inline-block;border-radius:2px}
+@media(max-width:650px){#miniMapPanel{right:7px;bottom:43px;width:174px;padding:5px}#miniMapTitle{font-size:9px}#miniMap{height:108px}#miniMapLegend{font-size:8px;gap:3px 6px}}
+
+#prompt{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);padding:9px 14px;background:#071522c9;border:1px solid #42647e;border-radius:8px;font-size:11px;color:#dffaf5;white-space:nowrap;text-align:center;max-width:90%}
+#flashOverlay{position:absolute;inset:0;pointer-events:none;background:rgba(255,30,30,.12);display:none;mix-blend-mode:screen}
+#flashOverlay.temp-emergency{display:block!important;background:rgba(255,0,20,.34);mix-blend-mode:screen;animation:tempRedFlash .55s steps(2,end) infinite;z-index:5}
+@keyframes tempRedFlash{0%,100%{opacity:.12;background:rgba(255,0,20,.20)}50%{opacity:1;background:rgba(255,0,20,.62)}}
+@media(prefers-reduced-motion:reduce){#flashOverlay.temp-emergency{animation:none;opacity:.55}}
+#side{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.card{background:linear-gradient(145deg,#14253a,#0e1b2b);border:1px solid var(--edge);border-radius:10px;padding:10px}
+.card h2{font-size:12px;margin:0 0 8px;color:#dcecff}
+.metric{display:flex;justify-content:space-between;gap:6px;padding:6px 0;border-bottom:1px solid #263b51;font-size:11px}.metric:last-child{border:0}.metric span{color:var(--muted)}.metric strong{text-align:right}
+.good{color:#65f1ad}.warn{color:#6ebfff}.bad{color:#ff6877}
+button{border:1px solid #385674;background:#1a3651;color:#eaf6ff;border-radius:7px;padding:9px 7px;font-size:11px;font-weight:bold;cursor:pointer}
+button:hover{filter:brightness(1.2)}button.primary{background:#126d66;border-color:#2cae9d}button.red{background:#7c2634;border-color:#b34a5b}button.active{background:#a45a18;border-color:#e6a34c}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#eventLog{font:10px/1.55 monospace;color:#b9d3eb;white-space:pre-wrap;max-height:95px;overflow:auto;margin:0}
+#routeMessage{font-size:11px;line-height:1.5;color:#c8d9ea;min-height:32px}
+.keyhelp{font-size:10px;color:#9db3ca;line-height:1.55}
+footer{height:22px;flex:0 0 22px;text-align:center;color:#738aa2;font-size:9px;padding:4px}
+#startCover{position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,13,24,.25),rgba(4,13,24,.78));display:flex;align-items:center;justify-content:center;z-index:3}
+#startBox{width:min(390px,90%);padding:20px;background:#0c1b2beF;border:1px solid #3c627e;border-radius:13px;text-align:center;box-shadow:0 15px 50px #0009}
+#startBox h2{font-size:19px;margin:0 0 8px}#startBox p{font-size:11px;line-height:1.6;color:#b5c9dc;margin:0 0 14px}
+#loadingArea{width:100%;margin:15px 0 4px;text-align:left}
+#loadingMeta{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:#b9d1e5;margin-bottom:7px}
+#loadingTrack{height:13px;width:100%;background:#071321;border:1px solid #3b607b;border-radius:20px;overflow:hidden;box-shadow:inset 0 2px 5px #0008}
+#loadingFill{height:100%;width:0%;border-radius:20px;background:linear-gradient(90deg,#12a98e,#54f5c9);box-shadow:0 0 12px #32eac0;transition:width .16s ease}
+#loadingNote{font-size:10px;color:#8faec7;margin-top:8px;text-align:center}
+#startBtn{width:100%;padding:12px;background:#087f72;border-color:#35c7b1;font-size:13px}
+#startBtn:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(.5)}
+@media(max-width:850px){main{grid-template-columns:minmax(0,1fr) 210px;padding:5px;gap:5px}.card{padding:8px}}
+@media(max-width:650px){header{height:48px;flex-basis:48px;padding:0 10px}h1{font-size:14px}.sub{font-size:9px}main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) 132px}#side{display:grid;grid-template-columns:1fr 1fr;overflow:auto}.card{padding:7px}.card h2{margin-bottom:5px}.metric{padding:4px 0;font-size:10px}#eventCard{display:none}footer{height:17px;flex-basis:17px}}
+</style>
+</head>
+<body>
+<div id="app">
+<header><div><h1>스마트 재난 대응 시뮬레이터</h1><div class="sub">FIRST-PERSON 3D · HOLOGRAPHIC ROUTE · EMERGENCY LIGHTING</div></div><div class="live">● 3D 시뮬레이션</div></header>
+<main>
+<section id="viewPanel">
+<canvas id="view" aria-label="3D 탐색 화면"></canvas>
+<div id="hudTop"><div><div id="viewName">시설 내부 · 1인칭 탐색 화면</div><div class="hint">WASD / 방향키 빠른 이동 · 시점 기준 방향 전환 · 마우스 또는 터치 회전</div></div><div class="compass" id="compass">N ↑</div></div>
+<div id="crosshair"></div>
+<div id="miniMapPanel" aria-label="암전과 관계없이 표시되는 2D 미니맵">
+  <div id="miniMapTitle">실시간 2D 미니맵 · 암전 영향 없음</div>
+  <canvas id="miniMap" width="360" height="280"></canvas>
+  <div id="miniMapLegend">
+    <span class="miniLegendItem"><i class="miniDot" style="background:#39ffc2"></i>경로</span>
+    <span class="miniLegendItem"><i class="miniDot" style="background:#55baff"></i>현재 위치</span>
+    <span class="miniLegendItem"><i class="miniDot" style="background:#ff5368"></i>폐쇄 위치</span>
+    <span class="miniLegendItem"><i class="miniDot" style="background:#50e6a0"></i>출구</span>
+    <span class="miniLegendItem"><i class="miniDot" style="background:#398dff"></i>위험 구역</span>
+  </div>
+</div>
+<div id="prompt">출구 방향의 홀로그램 경로를 따라 이동하세요.</div><div id="flashOverlay"></div>
+<div id="startCover"><div id="startBox"><h2>1인칭 3D 탐색 시작</h2><p>실제 3D 공간 안에서 이동하며 경로를 확인합니다.<br>키보드 WASD / 방향키로 부드럽게 이동하고 화면을 드래그해 시점을 회전합니다.<br>방향키도 현재 바라보는 방향을 기준으로 움직입니다. PC에서는 마우스 조작도 지원합니다.</p><div id="loadingArea">
+<div id="loadingMeta"><span id="loadingStatus">3D 환경 준비 중...</span><strong id="loadingPercent">0%</strong></div>
+<div id="loadingTrack" role="progressbar" aria-label="시뮬레이터 로딩" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="loadingFill"></div></div>
+<div id="loadingNote">건물 구조 · 조명 · 홀로그램 경로를 준비하고 있습니다.</div>
+</div>
+<button id="startBtn" disabled hidden>탐색 시작</button></div></div>
+</section>
+<aside id="side">
+<section class="card"><h2>실시간 상태</h2>
+<div class="metric"><span>조명 상태</span><strong id="lightState" class="good">밝음</strong></div>
+<div class="metric"><span>온도 상태</span><strong id="tempState" class="good">정상</strong></div>
+<div class="metric"><span>통로 상태</span><strong id="gateState">개방</strong></div>
+<div class="metric"><span>출구까지 거리</span><strong id="distance">-</strong></div>
+<div class="metric"><span>경로 상태</span><strong id="routeState" class="good">경로 확보</strong></div>
+</section>
+<section class="card"><h2>상황 제어</h2><div class="buttons">
+<button id="darkBtn" class="primary">암전 상황 시작</button>
+<button id="flashBtn">손전등 켜기</button>
+<button id="gateBtn" class="red">통로 폐쇄</button>
+<button id="tempBtn">온도 변경</button>
+<button id="resetBtn">초기화</button>
+<button id="repathBtn">경로 재탐색</button>
+</div></section>
+<section class="card" id="usbCard">
+  <h2>아두이노 USB 연결</h2>
+  <div class="buttons">
+    <button id="usbConnectBtn" class="primary">USB 연결</button>
+    <button id="usbDisconnectBtn" disabled>연결 해제</button>
+  </div>
+  <div class="metric"><span>USB 상태</span><strong id="usbStatus" class="warn">연결 대기</strong></div>
+  <div class="metric"><span>조이스틱</span><strong id="usbJoystick">대기</strong></div>
+  <div class="metric"><span>소리 센서</span><strong id="usbSound">-</strong></div>
+  <div class="metric"><span>조도 센서</span><strong id="usbLight">-</strong></div>
+  <div class="metric"><span>온도 센서</span><strong id="usbTemp">미연결</strong></div>
+  <div class="metric"><span>기울기 센서</span><strong id="usbTilt">-</strong></div>
+  <div class="metric"><span>근접 센서</span><strong id="usbProximity">미연결</strong></div>
+  <div class="keyhelp" id="usbHelp">노트북 Chrome에서 실행하고 USB 연결을 누른 뒤 Arduino 포트를 선택하세요.</div>
+</section>
+<section class="card"><h2>경로 안내</h2><div id="routeMessage">초록색 홀로그램 화살표가 바닥에 표시됩니다.</div></section>
+<section class="card" id="eventCard"><h2>이벤트 기록</h2><pre id="eventLog">[시스템] 3D 시설 환경 준비 완료</pre></section>
+<section class="card"><h2>조작 안내</h2><div class="keyhelp">W / ↑ : 바라보는 방향으로 전진<br>S / ↓ : 바라보는 방향의 반대로 후진<br>A / ← : 시점 기준 왼쪽 이동<br>D / → : 시점 기준 오른쪽 이동<br>마우스 또는 화면 드래그 : 시점 회전<br>C : 통로 폐쇄/개방<br>T : 온도 변경<br>L : 암전 전환</div></section>
+</aside>
+</main>
+<footer>교육용 가상 시뮬레이터 · 실제 재난 상황에서는 현장 안내와 공식 대피 지침을 따르세요.</footer>
+</div>
+<script>
+// 오류를 화면에 표시해 태블릿에서 원인을 확인할 수 있게 합니다.
+window.__simError = null;
+window.addEventListener('error', function(e) {
+  const detail = (e.message || '스크립트 오류') + (e.lineno ? ' (줄 ' + e.lineno + ')' : '');
+  window.__simError = detail;
+  const status = document.querySelector('#loadingStatus');
+  const note = document.querySelector('#loadingNote');
+  const percent = document.querySelector('#loadingPercent');
+  if (status) status.textContent = '초기화 오류';
+  if (note) note.textContent = detail;
+  if (percent) percent.textContent = '오류';
+});
+window.addEventListener('unhandledrejection', function(e) {
+  const reason = e.reason && (e.reason.message || String(e.reason));
+  window.__simError = '초기화 실패: ' + (reason || '원인을 확인할 수 없는 비동기 오류');
+  const status = document.querySelector('#loadingStatus');
+  const note = document.querySelector('#loadingNote');
+  const percent = document.querySelector('#loadingPercent');
+  if (status) status.textContent = '초기화 오류';
+  if (note) note.textContent = window.__simError;
+  if (percent) percent.textContent = '오류';
+});
+</script>
+<!-- Three.js 일반 스크립트 방식: ES 모듈/CORS 문제를 피하고 갤럭시 태블릿 호환성을 높입니다. -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>if (!window.THREE) document.write('<script src="https://unpkg.com/three@0.160.0/build/three.min.js"><\/script>');</script>
+<script>
+// 모듈 로딩 전에도 진행 표시가 움직이도록 일반 스크립트에서 로딩 UI를 먼저 시작합니다.
+(function(){
+ const fill=document.querySelector('#loadingFill'),percent=document.querySelector('#loadingPercent'),status=document.querySelector('#loadingStatus'),track=document.querySelector('#loadingTrack'),note=document.querySelector('#loadingNote'),area=document.querySelector('#loadingArea'),startBtn=document.querySelector('#startBtn');
+ let value=0,finished=false;
+ const labels=[{n:0,t:'3D 엔진 연결 중...'}, {n:25,t:'미로형 건물 구조 준비 중...'}, {n:50,t:'벽과 바닥 렌더링 준비 중...'}, {n:75,t:'조명과 경로 계산 준비 중...'}];
+ const timer=setInterval(()=>{
+   if(window.__simError){clearInterval(timer);status.textContent='초기화 오류';percent.textContent='확인 필요';note.textContent=window.__simError;return;}
+   if(window.__sceneReady){clearInterval(timer);fill.style.width='100%';percent.textContent='100%';track.setAttribute('aria-valuenow','100');status.textContent='준비 완료';note.textContent='모든 환경이 준비되었습니다. 탐색을 시작할 수 있습니다.';area.style.display='none';startBtn.hidden=false;startBtn.disabled=false;return;}
+   if(value<94)value=Math.min(94,value+1.2);
+   const label=labels.slice().reverse().find(x=>value>=x.n);if(label)status.textContent=label.t;
+   fill.style.width=value+'%';percent.textContent=Math.floor(value)+'%';track.setAttribute('aria-valuenow',String(Math.floor(value)));
+ },80);
+})();
+(function(){
+const THREE = window.THREE;
+if (!THREE) throw new Error('Three.js 파일을 불러오지 못했습니다. CDN 연결을 확인해 주세요.');
+const canvas=document.querySelector("#view");
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x9bb6c6);scene.fog=new THREE.Fog(0x9bb6c6,38,110);
+const camera=new THREE.PerspectiveCamera(76,1,.08,160);
+camera.position.set(0,1.65,0);
+const player={x:1,y:1};
+const COLS=31,ROWS=25,CELL=4,WALL_H=3.4;
+let gateClosed=false,tempLevel=0,darkMode=false,flashOn=true,route=[],yaw=0,pitch=0,locked=false;
+const grid=Array.from({length:ROWS},()=>Array(COLS).fill(1));
+let seed=78123;function rand(n){seed=(seed*9301+49297)%233280;return Math.floor(seed/233280*n);}
+const key=(x,z)=>`${x},${z}`;
+function carve(x,z){if(x>=0&&x<COLS&&z>=0&&z<ROWS)grid[z][x]=0;}
+const stack=[{x:1,z:1}],visited=new Set([key(1,1)]);carve(1,1);
+while(stack.length){const p=stack[stack.length-1];const ds=[[2,0],[-2,0],[0,2],[0,-2]];for(let i=ds.length-1;i>0;i--){const j=rand(i+1);[ds[i],ds[j]]=[ds[j],ds[i]];}let n=null;for(const [dx,dz] of ds){const x=p.x+dx,z=p.z+dz;if(x>0&&x<COLS-1&&z>0&&z<ROWS-1&&!visited.has(key(x,z))){n={x,z,dx,dz};break;}}if(n){carve(p.x+n.dx/2,p.z+n.dz/2);carve(n.x,n.z);visited.add(key(n.x,n.z));stack.push({x:n.x,z:n.z});}else stack.pop();}
+// Additional connections produce loops and meaningful alternative routes.
+for(let z=2;z<ROWS-2;z++)for(let x=2;x<COLS-2;x++){if(grid[z][x]===1&&rand(100)<10){const horiz=grid[z][x-1]===0&&grid[z][x+1]===0,vert=grid[z-1][x]===0&&grid[z+1][x]===0;if(horiz||vert)carve(x,z);}}
+for(let z=3;z<ROWS-2;z+=6)for(let x=3;x<COLS-2;x+=7){carve(x,z);if(x+1<COLS-1)carve(x+1,z);}
+const START={x:1,z:1},EXIT={x:29,z:23};carve(START.x,START.z);carve(EXIT.x,EXIT.z);
+const DANGER={x:23,z:11};carve(DANGER.x,DANGER.z);
+let GATE={x:15,z:11};
+function isBlocked(x,z){if(x<0||x>=COLS||z<0||z>=ROWS||grid[z][x]!==0)return true;if(gateClosed&&x===GATE.x&&z===GATE.z)return true;if(tempLevel===2&&x===DANGER.x&&z===DANGER.z)return true;return false;}
+function bfs(){const q=[{x:player.x,z:player.y}],came=new Map([[key(player.x,player.y),null]]);for(let i=0;i<q.length;i++){const p=q[i];if(p.x===EXIT.x&&p.z===EXIT.z)break;for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){const x=p.x+dx,z=p.z+dz,k=key(x,z);if(!isBlocked(x,z)&&!came.has(k)){came.set(k,key(p.x,p.z));q.push({x,z});}}}let k=key(EXIT.x,EXIT.z);if(!came.has(k)){route=[];return;}const out=[];while(k!==null){const [x,z]=k.split(",").map(Number);out.push({x,z});k=came.get(k);}route=out.reverse();}
+function chooseGate(){bfs();const original=[...route],len=original.length;for(let i=Math.floor(len*.32);i<Math.ceil(len*.7);i++){const p=original[i];GATE={x:p.x,z:p.z};gateClosed=true;bfs();if(route.length>len){gateClosed=false;bfs();return true;}}gateClosed=false;bfs();return false;}
+function faceInitialRoute(){if(route.length>1){const dx=route[1].x-player.x,dz=route[1].z-player.y;yaw=Math.atan2(-dx,-dz);}}
+chooseGate();faceInitialRoute();
+
+const floorMat=new THREE.MeshStandardMaterial({color:0x8499a6,roughness:.88});
+const wallMat=new THREE.MeshStandardMaterial({color:0xc4d0d5,roughness:.83});
+const wallAccent=new THREE.MeshStandardMaterial({color:0x536c7c,roughness:.8});
+const ceilingMat=new THREE.MeshStandardMaterial({color:0xa8b8c1,roughness:.9});
+const sceneGroup=new THREE.Group();scene.add(sceneGroup);
+const floorGeo=new THREE.BoxGeometry(CELL,.18,CELL);
+const wallGeo=new THREE.BoxGeometry(CELL,WALL_H,CELL);
+const ceilGeo=new THREE.BoxGeometry(CELL,.18,CELL);
+const floors=[],walls=[];
+for(let z=0;z<ROWS;z++)for(let x=0;x<COLS;x++){const wx=x*CELL,wz=z*CELL;if(grid[z][x]===0){const f=new THREE.Mesh(floorGeo,floorMat);f.position.set(wx,0,wz);f.receiveShadow=true;sceneGroup.add(f);floors.push(f);
+const c=new THREE.Mesh(ceilGeo,ceilingMat);c.position.set(wx,WALL_H+.15,wz);sceneGroup.add(c);
+}else{const w=new THREE.Mesh(wallGeo,wallMat);w.position.set(wx,WALL_H/2,wz);w.castShadow=true;w.receiveShadow=true;sceneGroup.add(w);walls.push(w);
+const strip=new THREE.Mesh(new THREE.BoxGeometry(CELL,.13,CELL),wallAccent);strip.position.set(wx,WALL_H-.12,wz);sceneGroup.add(strip);}}
+const worldW=COLS*CELL,worldD=ROWS*CELL;
+const ambient=new THREE.HemisphereLight(0xe6f5ff,0x526474,1.45);scene.add(ambient);
+const sun=new THREE.DirectionalLight(0xfff2db,2.15);sun.position.set(-30,55,-25);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
+const playerLight=new THREE.PointLight(0xffffff,0,25,2);camera.add(playerLight);playerLight.position.set(0,0,0);scene.add(camera);
+const spot=new THREE.SpotLight(0xfff1d5,0,34,Math.PI/7,.38,1.5);camera.add(spot);spot.position.set(0,0,0);spot.target.position.set(0,0,-1);camera.add(spot.target);
+const exitLight=new THREE.PointLight(0x37ffc0,2.2,16);exitLight.position.set(EXIT.x*CELL,2,EXIT.z*CELL);scene.add(exitLight);
+const gateMesh=new THREE.Mesh(new THREE.BoxGeometry(CELL*.88,2.7,.35),new THREE.MeshStandardMaterial({color:0xd63d4f,emissive:0x5c0712,roughness:.45}));gateMesh.position.set(GATE.x*CELL,1.35,GATE.z*CELL);scene.add(gateMesh);
+const gateStripe=new THREE.Mesh(new THREE.BoxGeometry(CELL*.9,.18,.4),new THREE.MeshStandardMaterial({color:0xffd55c,emissive:0x7a4a00}));gateStripe.position.set(GATE.x*CELL,2.2,GATE.z*CELL);scene.add(gateStripe);
+const exitMark=new THREE.Mesh(new THREE.BoxGeometry(2.4,2.6,.18),new THREE.MeshStandardMaterial({color:0x0a9e70,emissive:0x064d38}));exitMark.position.set(EXIT.x*CELL,1.5,EXIT.z*CELL-1.4);scene.add(exitMark);
+const exitTextCanvas=document.createElement("canvas");exitTextCanvas.width=256;exitTextCanvas.height=128;const exctx=exitTextCanvas.getContext("2d");exctx.fillStyle="#eafff6";exctx.font="bold 64px Arial";exctx.textAlign="center";exctx.fillText("EXIT",128,82);
+const exitTexture=new THREE.CanvasTexture(exitTextCanvas);const exitSign=new THREE.Mesh(new THREE.PlaneGeometry(2.2,1.1),new THREE.MeshBasicMaterial({map:exitTexture,transparent:true,side:THREE.DoubleSide}));exitSign.position.set(EXIT.x*CELL,2.2,EXIT.z*CELL-1.28);scene.add(exitSign);
+const routeGroup=new THREE.Group();scene.add(routeGroup);
+const holoMat=new THREE.MeshBasicMaterial({color:0x39ffc2,transparent:true,opacity:.95,side:THREE.DoubleSide,depthWrite:false});
+const haloMat=new THREE.MeshBasicMaterial({color:0x25eec2,transparent:true,opacity:.23,side:THREE.DoubleSide,depthWrite:false});
+const arrowShape=new THREE.Shape();arrowShape.moveTo(0,1.35);arrowShape.lineTo(.72,.05);arrowShape.lineTo(.25,.18);arrowShape.lineTo(.25,-1.05);arrowShape.lineTo(-.25,-1.05);arrowShape.lineTo(-.25,.18);arrowShape.lineTo(-.72,.05);arrowShape.closePath();
+function clearRoute(){while(routeGroup.children.length){const o=routeGroup.children.pop();o.geometry?.dispose();if(o.material!==holoMat&&o.material!==haloMat)o.material?.dispose();}}
+function renderRoute(){clearRoute();if(route.length<2)return;for(let i=0;i<route.length;i++){const p=route[i],x=p.x*CELL,z=p.z*CELL;const arrow=new THREE.Mesh(new THREE.ShapeGeometry(arrowShape),holoMat);arrow.position.set(x,.115,z);if(i<route.length-1){const n=route[i+1];const dx=n.x-p.x,dz=n.z-p.z;const floorQ=new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI/2,0,0));const turnQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.atan2(dx,-dz));arrow.quaternion.copy(turnQ).multiply(floorQ);}else{arrow.rotation.x=-Math.PI/2;}arrow.scale.set(.85,.85,.85);routeGroup.add(arrow);const glow=new THREE.Mesh(new THREE.CircleGeometry(1.35,20),haloMat);glow.rotation.x=-Math.PI/2;glow.position.set(x,.095,z);routeGroup.add(glow);}
+}
+function worldPos(){return{x:player.x*CELL,y:1.65,z:player.y*CELL};}
+function updateCamera(){const p=worldPos();camera.position.set(p.x,p.y,p.z);camera.rotation.order="YXZ";camera.rotation.y=yaw;camera.rotation.x=pitch;}
+function updateLighting(){if(darkMode){scene.background.set(0x01040a);scene.fog.color.set(0x01040a);scene.fog.near=8;scene.fog.far=34;ambient.intensity=.035;sun.intensity=.015;renderer.toneMappingExposure=.55;}else{scene.background.set(0x9bb6c6);scene.fog.color.set(0x9bb6c6);scene.fog.near=38;scene.fog.far=110;ambient.intensity=1.45;sun.intensity=2.15;renderer.toneMappingExposure=1.1;}spot.intensity=darkMode&&flashOn?95:0;playerLight.intensity=darkMode&&flashOn?1.8:0;document.querySelector("#lightState").textContent=darkMode?(flashOn?"암전 · 손전등 켜짐":"암전 · 손전등 꺼짐"):"밝음";document.querySelector("#lightState").className=darkMode?"bad":"good";document.querySelector("#darkBtn").textContent=darkMode?"밝은 조명으로 복귀":"암전 상황 시작";document.querySelector("#flashBtn").textContent=flashOn?"손전등 끄기":"손전등 켜기";}
+function addLog(s){const el=document.querySelector("#eventLog"),time=new Date().toLocaleTimeString("ko-KR",{hour12:false});el.textContent=`[${time}] ${s}\n`+el.textContent.split("\n").slice(0,6).join("\n");}
+
+// 2D 미니맵은 별도 Canvas로 그려 3D 암전/안개/손전등 효과의 영향을 받지 않습니다.
+const miniMapCanvas=document.querySelector("#miniMap");
+const miniMapCtx=miniMapCanvas.getContext("2d");
+let miniMapLast=0;
+function drawMiniMap(){
+ const ctx=miniMapCtx,W=miniMapCanvas.width,H=miniMapCanvas.height;
+ const pad=8,mapX=pad,mapY=pad,mapW=W-pad*2,mapH=H-pad*2;
+ const cw=mapW/COLS,ch=mapH/ROWS;
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle="#081522";ctx.fillRect(0,0,W,H);
+ // 벽과 통로
+ for(let z=0;z<ROWS;z++)for(let x=0;x<COLS;x++){
+  ctx.fillStyle=grid[z][x]===1?"#263b4e":"#b8c8ce";
+  ctx.fillRect(mapX+x*cw,mapY+z*ch,Math.ceil(cw),Math.ceil(ch));
+ }
+ // 위험 구역은 파란색으로 표시
+ ctx.fillStyle="rgba(45,135,255,.85)";
+ ctx.fillRect(mapX+DANGER.x*cw+cw*.12,mapY+DANGER.z*ch+ch*.12,cw*.76,ch*.76);
+ // 현재 계산된 최단 경로
+ if(route.length>0){
+  ctx.beginPath();
+  route.forEach((p,i)=>{
+   const px=mapX+(p.x+.5)*cw,py=mapY+(p.z+.5)*ch;
+   if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+  });
+  ctx.strokeStyle="#00e9ae";ctx.lineWidth=Math.max(2.5,cw*.48);ctx.lineCap="round";ctx.lineJoin="round";ctx.stroke();
+  route.forEach(p=>{
+   ctx.beginPath();ctx.arc(mapX+(p.x+.5)*cw,mapY+(p.z+.5)*ch,Math.max(1.5,cw*.16),0,Math.PI*2);
+   ctx.fillStyle="#b7ffe9";ctx.fill();
+  });
+ }
+ // 출구
+ const ex=mapX+(EXIT.x+.5)*cw,ey=mapY+(EXIT.z+.5)*ch;
+ ctx.fillStyle="#50e6a0";ctx.fillRect(ex-cw*.38,ey-ch*.38,cw*.76,ch*.76);
+ ctx.strokeStyle="#063e2a";ctx.lineWidth=1;ctx.strokeRect(ex-cw*.38,ey-ch*.38,cw*.76,ch*.76);
+ // 통로 폐쇄 위치: 개방 중에도 위치를 계속 표시
+ const gx=mapX+(GATE.x+.5)*cw,gy=mapY+(GATE.z+.5)*ch;
+ ctx.beginPath();ctx.arc(gx,gy,Math.max(4,cw*.65),0,Math.PI*2);
+ ctx.fillStyle=gateClosed?"#ff405b":"rgba(255,176,64,.28)";ctx.fill();
+ ctx.strokeStyle=gateClosed?"#fff0f2":"#ffb84d";ctx.lineWidth=2;ctx.stroke();
+ if(gateClosed){
+  ctx.strokeStyle="#fff";ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(gx-cw*.28,gy-ch*.28);ctx.lineTo(gx+cw*.28,gy+ch*.28);ctx.moveTo(gx+cw*.28,gy-ch*.28);ctx.lineTo(gx-cw*.28,gy+ch*.28);ctx.stroke();
+ }
+ // 현재 위치와 바라보는 방향
+ const px=mapX+(camera.position.x/CELL)*cw,py=mapY+(camera.position.z/CELL)*ch;
+ const angle=Math.atan2(-Math.cos(yaw),-Math.sin(yaw));
+ ctx.save();ctx.translate(px,py);ctx.rotate(angle);
+ ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(-6,-5);ctx.lineTo(-6,5);ctx.closePath();
+ ctx.fillStyle="#55baff";ctx.fill();ctx.strokeStyle="#e8f7ff";ctx.lineWidth=1.5;ctx.stroke();ctx.restore();
+ // 외곽선
+ ctx.strokeStyle="#6b8da7";ctx.lineWidth=1;ctx.strokeRect(mapX,mapY,mapW,mapH);
+}
+
+function updateUI(){document.querySelector("#gateState").textContent=gateClosed?"폐쇄":"개방";document.querySelector("#tempState").textContent=["정상","주의","위험"][tempLevel];document.querySelector("#tempState").className=tempLevel===2?"bad":tempLevel===1?"warn":"good";document.querySelector("#distance").textContent=route.length?`${route.length-1}칸`:"측정 불가";document.querySelector("#routeState").textContent=route.length?"최단 경로 표시":"경로 없음";document.querySelector("#routeState").className=route.length?"good":"bad";document.querySelector("#routeMessage").textContent=route.length?`현재 위치에서 출구까지 ${route.length-1}칸. 바닥의 초록 홀로그램 화살표를 따라가세요.`:"출구까지 경로가 없습니다. 폐쇄 통로 또는 위험 구역을 확인하세요.";}
+function recalc(){bfs();renderRoute();updateUI();drawMiniMap();}
+function collisionAt(x,z){const gx=Math.round(x/CELL),gz=Math.round(z/CELL);for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){const xx=gx+dx,zz=gz+dz;if(isBlocked(xx,zz)){const cx=xx*CELL,cz=zz*CELL;if(Math.abs(x-cx)<CELL*.68&&Math.abs(z-cz)<CELL*.68)return true;}}return false;}
+// 연속 좌표 기반 이동: 격자 한 칸씩 순간 이동하지 않고 초당 속도로 이동합니다.
+const keys={};
+const moveVelocity={x:0,z:0};
+// Arduino joystick input: forward/side range -1..1
+let joystickForward=0, joystickSide=0;
+let joystickTargetForward=0, joystickTargetSide=0, joystickLastPacket=0;
+const JOY_CENTER_X=512, JOY_CENTER_Y=512;
+const JOY_DEADZONE=0.18;    // 중앙 흔들림 방지 구간
+const JOY_INPUT_SMOOTH=11;  // 입력값 저역통과 필터
+const MOVE_SPEED=5.2;       // 월드 단위/초
+const MOVE_ACCEL=8.0;       // 급격한 출발을 줄인 가속도
+const MOVE_DAMPING=8.5;     // 입력 해제 시 부드러운 감속
+function normalizeJoystick(value, center){
+ const signed=(value-center)/(value>=center?1023-center:center);
+ const amount=Math.abs(signed);
+ if(amount<=JOY_DEADZONE)return 0;
+ return Math.sign(signed)*Math.min(1,(amount-JOY_DEADZONE)/(1-JOY_DEADZONE));
+}
+let last=0,lastGridX=player.x,lastGridZ=player.y;
+// e.code를 사용해 한글 입력 상태에서도 WASD 키를 정확하게 인식합니다.
+function controlKey(e){
+ const code=e.code||"";
+ if(code==="KeyW")return "w";
+ if(code==="KeyA")return "a";
+ if(code==="KeyS")return "s";
+ if(code==="KeyD")return "d";
+ if(code==="ArrowUp")return "arrowup";
+ if(code==="ArrowDown")return "arrowdown";
+ if(code==="ArrowLeft")return "arrowleft";
+ if(code==="ArrowRight")return "arrowright";
+ const k=(e.key||"").toLowerCase();
+ return ["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","c","t","l","f"].includes(k)?k:"";
+}
+window.addEventListener("keydown",e=>{
+ const k=controlKey(e);
+ if(!k)return;
+ if(k.startsWith("arrow"))e.preventDefault();
+ if(!keys[k]&&(k==="c"||k==="t"||k==="l"||k==="f")){
+  if(k==="c")toggleGate();
+  if(k==="t")cycleTemp();
+  if(k==="l")toggleDark();
+  if(k==="f"){flashOn=!flashOn;updateLighting();}
+ }
+ keys[k]=true;
+});
+window.addEventListener("keyup",e=>{
+ const k=controlKey(e);
+ if(k)keys[k]=false;
+});
+window.addEventListener("blur",()=>{
+ for(const k in keys)keys[k]=false;
+ moveVelocity.x=0;
+ moveVelocity.z=0;
+});
+function animate(t){
+ requestAnimationFrame(animate);
+ const dt=last?Math.min((t-last)/1000,0.05):0;last=t;
+ let forward=0,side=0;
+ // WASD와 방향키 모두 카메라가 바라보는 방향을 기준으로 움직입니다.
+ if(keys.w||keys.arrowup)forward+=1;
+ if(keys.s||keys.arrowdown)forward-=1;
+ if(keys.a||keys.arrowleft)side-=1;
+ if(keys.d||keys.arrowright)side+=1;
+ // USB joystick input is smoothed every animation frame to avoid stepped movement.
+ const joystickFresh=joystickLastPacket && performance.now()-joystickLastPacket<550;
+ const wantedForward=joystickFresh?joystickTargetForward:0;
+ const wantedSide=joystickFresh?joystickTargetSide:0;
+ const inputBlend=1-Math.exp(-JOY_INPUT_SMOOTH*dt);
+ joystickForward+=(wantedForward-joystickForward)*inputBlend;
+ joystickSide+=(wantedSide-joystickSide)*inputBlend;
+ forward += joystickForward;
+ side += joystickSide;
+ const mag=Math.hypot(forward,side)||1;forward/=mag;side/=mag;
+ const fx=-Math.sin(yaw),fz=-Math.cos(yaw),rx=Math.cos(yaw),rz=-Math.sin(yaw);
+ const targetX=(fx*forward+rx*side)*MOVE_SPEED;
+ const targetZ=(fz*forward+rz*side)*MOVE_SPEED;
+ const blend=1-Math.exp(-(forward||side?MOVE_ACCEL:MOVE_DAMPING)*dt);
+ moveVelocity.x+=(targetX-moveVelocity.x)*blend;
+ moveVelocity.z+=(targetZ-moveVelocity.z)*blend;
+ const dx=moveVelocity.x*dt,dz=moveVelocity.z*dt;
+ // 축별 충돌 판정으로 벽을 따라 미끄러지듯 이동할 수 있게 합니다.
+ const nextX=camera.position.x+dx;
+ if(!collisionAt(nextX,camera.position.z))camera.position.x=nextX;else moveVelocity.x=0;
+ const nextZ=camera.position.z+dz;
+ if(!collisionAt(camera.position.x,nextZ))camera.position.z=nextZ;else moveVelocity.z=0;
+ // 경로 탐색은 실제 이동한 격자 칸이 바뀔 때만 갱신합니다.
+ const gx=Math.max(0,Math.min(COLS-1,Math.round(camera.position.x/CELL)));
+ const gz=Math.max(0,Math.min(ROWS-1,Math.round(camera.position.z/CELL)));
+ if(gx!==lastGridX||gz!==lastGridZ){
+  player.x=gx;player.y=gz;lastGridX=gx;lastGridZ=gz;recalc();
+  if(gx===EXIT.x&&gz===EXIT.z)document.querySelector("#prompt").textContent="출구에 도착했습니다!";
+ }
+ camera.position.y=1.65;
+ if(t-miniMapLast>90){drawMiniMap();miniMapLast=t;}
+ renderer.render(scene,camera);
+}
+function toggleGate(){if(!gateClosed&&player.x===GATE.x&&player.y===GATE.z){document.querySelector("#prompt").textContent="차단 지점 위에 있어 폐쇄할 수 없습니다.";return;}gateClosed=!gateClosed;gateMesh.visible=gateClosed;gateStripe.visible=gateClosed;addLog(gateClosed?"기존 최단 경로 위 통로 폐쇄":"폐쇄 통로 개방");recalc();document.querySelector("#prompt").textContent=gateClosed?"기존 경로가 폐쇄되었습니다. 우회 경로가 다시 표시됩니다.":"통로가 개방되어 최단 경로를 다시 계산했습니다.";}
+function cycleTemp(){tempLevel=(tempLevel+1)%3;const dangerMaterial=new THREE.MeshStandardMaterial({color:tempLevel===2?0xff293d:tempLevel===1?0x267cff:0x647f91,emissive:tempLevel===2?0x76000b:tempLevel===1?0x092b70:0x000000,transparent:true,opacity:.75});const marker=scene.getObjectByName("dangerMarker");if(marker){marker.material.dispose();marker.material=dangerMaterial;}addLog(["온도 정상","온도 주의","고온 위험"][tempLevel]);recalc();}
+function toggleDark(){darkMode=!darkMode;updateLighting();addLog(darkMode?"암전 상황 시작 · 손전등 조명 활성화":"일반 조명 복구");document.querySelector("#prompt").textContent=darkMode?"암전 상태입니다. 손전등 빛과 홀로그램 경로를 이용하세요.":"밝은 조명으로 복귀했습니다.";}
+document.querySelector("#darkBtn").onclick=toggleDark;
+document.querySelector("#flashBtn").onclick=()=>{flashOn=!flashOn;updateLighting();addLog(flashOn?"손전등 켜짐":"손전등 꺼짐");};
+document.querySelector("#gateBtn").onclick=toggleGate;
+document.querySelector("#tempBtn").onclick=cycleTemp;
+document.querySelector("#repathBtn").onclick=()=>{recalc();addLog("최단 경로 재탐색");};
+document.querySelector("#resetBtn").onclick=()=>{player.x=START.x;player.y=START.z;lastGridX=START.x;lastGridZ=START.z;moveVelocity.x=0;moveVelocity.z=0;gateClosed=false;tempLevel=0;gateMesh.visible=false;gateStripe.visible=false;darkMode=false;flashOn=true;yaw=0;pitch=0;updateCamera();updateLighting();recalc();faceInitialRoute();updateCamera();addLog("시뮬레이션 초기화");};
+const dangerGeo=new THREE.BoxGeometry(2.3,.08,2.3),dangerMesh=new THREE.Mesh(dangerGeo,new THREE.MeshBasicMaterial({color:0x2d91ff,transparent:true,opacity:.42}));dangerMesh.position.set(DANGER.x*CELL,.12,DANGER.z*CELL);dangerMesh.name="dangerMarker";scene.add(dangerMesh);
+const resize=()=>{const w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();};new ResizeObserver(resize).observe(canvas);resize();
+const startBtn=document.querySelector("#startBtn");
+startBtn.onclick=()=>{if(startBtn.disabled)return;document.querySelector("#startCover").style.display="none";if(matchMedia("(pointer:fine)").matches)canvas.requestPointerLock?.();};
+// 태블릿/휴대폰: 화면을 손가락으로 드래그해 1인칭 시점을 회전합니다.
+let touchLook=null;
+canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&document.querySelector('#startCover').style.display==='none'){touchLook={x:e.clientX,y:e.clientY};canvas.setPointerCapture?.(e.pointerId);}});
+canvas.addEventListener('pointermove',e=>{if(e.pointerType==='touch'&&touchLook){const dx=e.clientX-touchLook.x,dy=e.clientY-touchLook.y;touchLook={x:e.clientX,y:e.clientY};yaw-=dx*.006;pitch-=dy*.005;pitch=Math.max(-1.05,Math.min(1.05,pitch));camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;}});
+canvas.addEventListener('pointerup',e=>{if(e.pointerType==='touch')touchLook=null;});
+canvas.addEventListener('pointercancel',()=>{touchLook=null;});
+document.addEventListener("pointerlockchange",()=>{locked=document.pointerLockElement===canvas;document.querySelector("#prompt").textContent=locked?"WASD로 이동하고 마우스로 둘러보세요. ESC를 누르면 마우스 조작이 해제됩니다.":"탐색 화면을 클릭해 마우스 시점 조작을 다시 시작할 수 있습니다.";});
+canvas.addEventListener("click",()=>{if(!locked&&document.querySelector("#startCover").style.display==="none")canvas.requestPointerLock?.();});
+document.addEventListener("mousemove",e=>{if(!locked)return;yaw-=e.movementX*.0022;pitch-=e.movementY*.0018;pitch=Math.max(-1.05,Math.min(1.05,pitch));camera.rotation.order="YXZ";camera.rotation.y=yaw;camera.rotation.x=pitch;});
+updateCamera();gateMesh.visible=false;gateStripe.visible=false;updateLighting();recalc();drawMiniMap();addLog("기존 최단 경로 위에 우회 가능한 폐쇄 통로 배치 완료");
+// USB 수신 스크립트가 기존 3D 시뮬레이터 기능을 안전하게 호출하도록 연결합니다.
+window.__simApi = {
+  log: addLog,
+  setDark: function(value){ if(darkMode !== value) toggleDark(); },
+  setTemperature: function(value){
+    const level = value >= 24 ? 2 : (value >= 23 ? 1 : 0);
+    if(tempLevel === level) return;
+    tempLevel = level;
+    const dangerMaterial = new THREE.MeshStandardMaterial({
+      color: level===2?0xff293d:level===1?0x267cff:0x647f91,
+      emissive: level===2?0x76000b:level===1?0x092b70:0x000000,
+      transparent:true, opacity:.75
+    });
+    const marker = scene.getObjectByName("dangerMarker");
+    if(marker){ marker.material.dispose(); marker.material = dangerMaterial; }
+    addLog(["온도 정상","온도 주의","고온 위험(시연 기준)"][level]);
+    recalc();
+  },
+  setTilt: function(value){ if(value && !gateClosed) toggleGate(); },
+  triggerButton: function(){ if(!gateClosed) toggleGate(); }
+};
+// 실제 초기화가 끝난 뒤에만 완료 처리합니다.
+window.__sceneReady=true;
+requestAnimationFrame(animate);
+})();
+</script>
+<script>
+// 초기화가 일정 시간 안에 끝나지 않으면 멈춘 위치를 사용자에게 알립니다.
+setTimeout(function(){
+  if (!window.__sceneReady && !window.__simError) {
+    window.__simError = '3D 초기화가 20초 안에 끝나지 않았습니다. 페이지를 새로고침하거나 브라우저 탭을 닫고 다시 열어 주세요.';
+    document.querySelector('#loadingStatus').textContent = '초기화 시간 초과';
+    document.querySelector('#loadingPercent').textContent = '오류';
+    document.querySelector('#loadingNote').textContent = window.__simError;
+  }
+}, 20000);
+</script>
+
+<script>
+/* Arduino USB serial bridge: newline-delimited JSON from UNO R4 WiFi */
+(function(){
+  const connectBtn=document.querySelector("#usbConnectBtn");
+  const disconnectBtn=document.querySelector("#usbDisconnectBtn");
+  const statusEl=document.querySelector("#usbStatus");
+  const helpEl=document.querySelector("#usbHelp");
+  let port=null,reader=null,keepReading=false;
+  let lastTilt=false,lastButton=false,lastSoundAlert=false,lastDark=null,lastTempLevel=null;
+  let alarmAudio=null,alarmOsc=null,alarmGain=null,alarmTimer=null,alarmHigh=false;
+  async function prepareAlarmAudio(){
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return;
+      if(!alarmAudio)alarmAudio=new AC();
+      if(alarmAudio.state==='suspended')await alarmAudio.resume();
+    }catch(err){console.warn('사이렌 오디오를 시작할 수 없습니다:',err);}
+  }
+  function setTemperatureAlarm(active){
+    const overlay=document.querySelector('#flashOverlay');
+    if(overlay){
+      overlay.classList.toggle('temp-emergency',active);
+      if(active)overlay.style.display='block';
+      else {overlay.style.display='none';overlay.style.opacity='';}
+    }
+    if(!active){
+      if(alarmTimer){clearInterval(alarmTimer);alarmTimer=null;}
+      if(alarmOsc){try{alarmOsc.stop();}catch(e){}try{alarmOsc.disconnect();}catch(e){}alarmOsc=null;}
+      if(alarmGain){try{alarmGain.disconnect();}catch(e){}alarmGain=null;}
+      alarmHigh=false;
+      return;
+    }
+    if(!alarmAudio||alarmAudio.state!=='running'||alarmOsc)return;
+    try{
+      alarmOsc=alarmAudio.createOscillator();
+      alarmGain=alarmAudio.createGain();
+      alarmOsc.type='sawtooth';
+      alarmOsc.frequency.value=720;
+      alarmGain.gain.value=0.0001;
+      alarmOsc.connect(alarmGain);alarmGain.connect(alarmAudio.destination);
+      alarmOsc.start();
+      alarmGain.gain.setTargetAtTime(0.055,alarmAudio.currentTime,0.04);
+      alarmTimer=setInterval(()=>{
+        if(!alarmOsc||!alarmAudio)return;
+        alarmHigh=!alarmHigh;
+        alarmOsc.frequency.setTargetAtTime(alarmHigh?980:620,alarmAudio.currentTime,0.08);
+      },420);
+    }catch(err){console.warn('사이렌 재생 실패:',err);}
+  }
+  function setStatus(t,c){statusEl.textContent=t;statusEl.className=c||"";}
+  function logEvent(m){if(window.__simApi)window.__simApi.log(m);}
+  function updateText(id,v){const el=document.querySelector(id);if(el)el.textContent=v;}
+  function applySensorData(d){
+    // Joystick: use measured raw axes directly, not the Arduino direction label.
+    // Measured polarity: X high=right, X low=left; Y high=forward, Y low=backward.
+    if(typeof d.joystickX==="number" && typeof d.joystickY==="number"){
+      const x=d.joystickX, y=d.joystickY;
+      joystickTargetSide=normalizeJoystick(x,JOY_CENTER_X);
+      joystickTargetForward=normalizeJoystick(y,JOY_CENTER_Y);
+      joystickLastPacket=performance.now();
+      const dx=x-JOY_CENTER_X, dy=y-JOY_CENTER_Y;
+      const right=Math.abs(dx)>JOY_CENTER_X*JOY_DEADZONE && dx>0;
+      const left=Math.abs(dx)>JOY_CENTER_X*JOY_DEADZONE && dx<0;
+      const up=Math.abs(dy)>JOY_CENTER_Y*JOY_DEADZONE && dy>0;
+      const down=Math.abs(dy)>JOY_CENTER_Y*JOY_DEADZONE && dy<0;
+      const direction=up&&right?"UP_RIGHT":up&&left?"UP_LEFT":down&&right?"DOWN_RIGHT":down&&left?"DOWN_LEFT":up?"UP":down?"DOWN":left?"LEFT":right?"RIGHT":"CENTER";
+      updateText("#usbJoystick",direction+" · X:"+x+" Y:"+y);
+    }
+    if(typeof d.sound==="number"){
+      updateText("#usbSound",Math.round(d.sound));
+      const alertNow=d.sound>=240;
+      if(alertNow&&!lastSoundAlert){logEvent("소리 센서 감지 · 측정 기준 240");const ov=document.querySelector("#flashOverlay");if(ov){ov.style.display="block";setTimeout(()=>ov.style.display="none",450);}}
+      lastSoundAlert=alertNow;
+    }
+    if(typeof d.lightRaw==="number")updateText("#usbLight",Math.round(d.lightRaw)+" / 1023");
+    else if(typeof d.lightPct==="number")updateText("#usbLight",Math.round(d.lightPct)+"%");
+    const darkNow=typeof d.darkMode==="boolean"?d.darkMode:(typeof d.lightRaw==="number"?d.lightRaw>=280:(typeof d.lightPct==="number"?d.lightPct<20:null));
+    if(darkNow!==null&&darkNow!==lastDark){if(window.__simApi)window.__simApi.setDark(darkNow);lastDark=darkNow;}
+    if(typeof d.temperature==="number"){
+      updateText("#usbTemp",d.temperature.toFixed(1)+" °C");
+      const level=d.temperature>=24?2:d.temperature>=23?1:0;
+      setTemperatureAlarm(level===2);
+      if(level!==lastTempLevel){if(window.__simApi)window.__simApi.setTemperature(d.temperature);lastTempLevel=level;}
+    } else { updateText("#usbTemp","센서 오류/미연결"); setTemperatureAlarm(false); }
+    if(typeof d.tilt==="boolean"){
+      updateText("#usbTilt",d.tilt?"감지":"정상");
+      if(d.tilt&&!lastTilt){if(window.__simApi)window.__simApi.setTilt(true);logEvent("기울기 센서 감지");}
+      lastTilt=d.tilt;
+    }
+    if(typeof d.button==="boolean"){
+      if(d.button&&!lastButton){if(window.__simApi)window.__simApi.triggerButton();logEvent("푸쉬버튼 입력");}
+      lastButton=d.button;
+    }
+    if(typeof d.proximity==="boolean")updateText("#usbProximity",d.proximity?"근접 감지":"감지 없음");
+    else if(typeof d.proximity==="number")updateText("#usbProximity",d.proximity+" cm");
+  }
+  async function readLoop(){
+    keepReading=true;
+    const textStream=port.readable.pipeThrough(new TextDecoderStream());
+    reader=textStream.getReader();let buffer="";
+    try{
+      while(keepReading){
+        const {value,done}=await reader.read();if(done)break;
+        buffer+=value;
+        let idx;
+        // Arduino Serial.println ends each JSON record with a real newline.
+        while((idx=buffer.indexOf("\n"))>=0){
+          const line=buffer.slice(0,idx).trim();buffer=buffer.slice(idx+1);
+          if(!line)continue;
+          try{applySensorData(JSON.parse(line));}
+          catch(err){console.warn("센서 JSON 해석 실패:",line,err);}
+        }
+      }
+    }catch(err){if(keepReading){console.error(err);setStatus("데이터 수신 오류","bad");helpEl.textContent=err.message||String(err);}}
+    finally{try{reader.releaseLock();}catch(e){}reader=null;}
+  }
+  connectBtn.addEventListener("click",async()=>{
+    await prepareAlarmAudio();
+    if(!("serial" in navigator)){setStatus("미지원 브라우저","bad");helpEl.textContent="데스크톱 Chrome/Edge의 HTTPS에서 실행해 주세요.";return;}
+    try{
+      port=await navigator.serial.requestPort();await port.open({baudRate:115200});
+      setStatus("연결됨 · 데이터 수신 중","good");helpEl.textContent="조이스틱을 움직여 방향 표시와 1인칭 이동을 확인하세요.";
+      connectBtn.disabled=true;disconnectBtn.disabled=false;logEvent("Arduino USB 연결 완료");readLoop();
+    }catch(err){setStatus("연결 실패","bad");helpEl.textContent=err.message||String(err);console.error(err);}
+  });
+  async function disconnect(){keepReading=false;setTemperatureAlarm(false);joystickForward=0;joystickSide=0;joystickTargetForward=0;joystickTargetSide=0;joystickLastPacket=0;try{if(reader)await reader.cancel();}catch(e){}try{if(port)await port.close();}catch(e){}port=null;reader=null;connectBtn.disabled=false;disconnectBtn.disabled=true;setStatus("연결 해제","warn");helpEl.textContent="USB 연결이 해제되었습니다.";logEvent("Arduino USB 연결 해제");}
+  disconnectBtn.addEventListener("click",disconnect);
+  if("serial" in navigator)navigator.serial.addEventListener("disconnect",()=>{disconnect();setStatus("USB 분리됨","bad");});
+})();
+</script>
+
+</body>
+</html>
